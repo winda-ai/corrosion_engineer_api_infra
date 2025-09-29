@@ -79,10 +79,6 @@ jobs:
       if: ${{ env.TF_ACTION == 'plan' }}
       run: make plan ENV=${{ env.TF_ENVIRONMENT }} REGION=${{ env.TF_REGION }}
 
-    - name: Plan (save binary)
-      if: ${{ env.TF_ACTION == 'plan' }}
-      run: make plan-save ENV=${{ env.TF_ENVIRONMENT }} REGION=${{ env.TF_REGION }}
-
     - name: Apply
       if: ${{ env.TF_ACTION == 'apply' }}
       run: make apply ENV=${{ env.TF_ENVIRONMENT }} REGION=${{ env.TF_REGION }}
@@ -102,6 +98,4 @@ jobs:
         echo "Environment: ${{ env.TF_ENVIRONMENT }}" >> $GITHUB_STEP_SUMMARY
         echo "Region: ${{ env.TF_REGION }}" >> $GITHUB_STEP_SUMMARY
         if [ -f src/tfplan ]; then echo "Plan artifact: src/tfplan" >> $GITHUB_STEP_SUMMARY; fi
-
-
 

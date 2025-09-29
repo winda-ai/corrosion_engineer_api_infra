@@ -9,6 +9,9 @@ init:
 plan:
 	terraform -chdir=main plan -var-file=$(VARS_FILE)
 
+plan-save:
+	terraform -chdir=main plan -out=tfplan -var-file=$(VARS_FILE)
+
 apply:
 	terraform -chdir=main apply -auto-approve -var-file=$(VARS_FILE)
 
