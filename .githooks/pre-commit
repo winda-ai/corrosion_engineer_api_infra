@@ -25,6 +25,6 @@ fi
 terraform init -backend=false -chdir="$TF_DIR"
 
 info "Running terraform validate"
-terraform -chdir="$TF_DIR" validate
+terraform -chdir="$TF_DIR" -no-color validate
 
 success "Terraform validation passed"
