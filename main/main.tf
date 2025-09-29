@@ -16,7 +16,7 @@ resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
   enable_dns_hostnames = true
-  tags = merge(local.common_tags, { Name = "${var.name_prefix}-vpc" })
+  tags                 = merge(local.common_tags, { Name = "${var.name_prefix}-vpc" })
 }
 
 # Internet Gateway
@@ -27,21 +27,21 @@ resource "aws_internet_gateway" "igw" {
 
 # Public Subnets
 resource "aws_subnet" "public" {
-  for_each = { for idx, cidr in var.public_subnet_cidrs : idx => cidr }
+  for_each                = { for idx, cidr in var.public_subnet_cidrs : idx => cidr }
   vpc_id                  = aws_vpc.main.id
   cidr_block              = each.value
   availability_zone       = local.azs[tonumber(each.key)]
   map_public_ip_on_launch = true
-  tags = merge(local.common_tags, { Name = "${var.name_prefix}-public-${each.key}" , Tier = "public"})
+  tags                    = merge(local.common_tags, { Name = "${var.name_prefix}-public-${each.key}", Tier = "public" })
 }
 
 # Private Subnets
 resource "aws_subnet" "private" {
-  for_each = { for idx, cidr in var.private_subnet_cidrs : idx => cidr }
+  for_each          = { for idx, cidr in var.private_subnet_cidrs : idx => cidr }
   vpc_id            = aws_vpc.main.id
   cidr_block        = each.value
   availability_zone = local.azs[tonumber(each.key)]
-  tags = merge(local.common_tags, { Name = "${var.name_prefix}-private-${each.key}", Tier = "private" })
+  tags              = merge(local.common_tags, { Name = "${var.name_prefix}-private-${each.key}", Tier = "private" })
 }
 
 # Elastic IP for NAT
@@ -102,31 +102,28 @@ resource "aws_security_group" "alb" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description = "HTTP from internet"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    description      = "HTTP from internet"
+    from_port        = 80
+    to_port          = 80
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
     ipv6_cidr_blocks = ["::/0"]
   }
 
-  dynamic "ingress" {
-    for_each = var.enable_https ? [1] : []
-    content {
-      description = "HTTPS from internet"
-      from_port   = 443
-      to_port     = 443
-      protocol    = "tcp"
-      cidr_blocks = ["0.0.0.0/0"]
-      ipv6_cidr_blocks = ["::/0"]
-    }
+  ingress {
+    description      = "HTTPS from internet"
+    from_port        = 443
+    to_port          = 443
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
   }
 
   egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
     ipv6_cidr_blocks = ["::/0"]
   }
 
@@ -214,7 +211,7 @@ resource "aws_iam_role_policy" "task_inline" {
 
 resource "aws_cloudwatch_log_group" "app" {
   name              = "/ecs/${var.name_prefix}/corrosion-engineer-api"
-  retention_in_days = var.log_retention_days
+  retention_in_days = 30
   tags              = merge(local.common_tags, { Name = "${var.name_prefix}-app-log-group" })
 }
 
@@ -236,8 +233,8 @@ resource "aws_ecs_task_definition" "app" {
   family                   = "${var.name_prefix}-corrosion-engineer-api"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu                      = "512"    # 0.5 vCPU
-  memory                   = "1024"   # 1GB
+  cpu                      = "512"  # 0.5 vCPU
+  memory                   = "1024" # 1GB
   execution_role_arn       = aws_iam_role.task_execution.arn
   task_role_arn            = aws_iam_role.task.arn
 
@@ -314,22 +311,21 @@ resource "aws_lb_listener" "http" {
   protocol          = "HTTP"
 
   default_action {
-    type = "forward"
+    type             = "forward"
     target_group_arn = aws_lb_target_group.app.arn
   }
 }
 
 # HTTPS Listener (optional)
 resource "aws_lb_listener" "https" {
-  count             = var.enable_https && length(var.acm_certificate_arn) > 0 ? 1 : 0
   load_balancer_arn = aws_lb.app.arn
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = var.acm_certificate_arn
+  certificate_arn   = aws_acm_certificate.this.arn
 
   default_action {
-    type = "forward"
+    type             = "forward"
     target_group_arn = aws_lb_target_group.app.arn
   }
 }
@@ -339,16 +335,16 @@ resource "aws_lb_listener" "https" {
 ///////////////////////////////////////////////
 
 resource "aws_ecs_service" "app" {
-  name            = "${var.name_prefix}-app-service"
-  cluster         = aws_ecs_cluster.this.id
-  task_definition = aws_ecs_task_definition.app.arn
-  desired_count   = var.desired_count
-  launch_type     = "FARGATE"
+  name                   = "${var.name_prefix}-app-service"
+  cluster                = aws_ecs_cluster.this.id
+  task_definition        = aws_ecs_task_definition.app.arn
+  desired_count          = var.desired_count
+  launch_type            = "FARGATE"
   enable_execute_command = true
 
   network_configuration {
-    subnets         = [for s in aws_subnet.private : s.id]
-    security_groups = [aws_security_group.ecs_tasks.id]
+    subnets          = [for s in aws_subnet.private : s.id]
+    security_groups  = [aws_security_group.ecs_tasks.id]
     assign_public_ip = false
   }
 
@@ -419,7 +415,6 @@ resource "aws_route53_record" "alb" {
     zone_id                = aws_lb.app.zone_id
     evaluate_target_health = true
   }
-  ttl  = 60
 }
 
 ///////////////////////////////////////////////
@@ -430,7 +425,7 @@ resource "aws_route53_record" "alb" {
 resource "aws_acm_certificate" "this" {
   domain_name       = local.fqdn
   validation_method = "DNS"
-  
+
   lifecycle {
     create_before_destroy = true
   }
@@ -444,7 +439,7 @@ resource "aws_acm_certificate_validation" "this" {
 }
 
 resource "time_sleep" "wait_30_seconds_for_certification_validation" {
-  depends_on = [ aws_acm_certificate.this ]
+  depends_on      = [aws_acm_certificate.this]
   create_duration = "30s"
 }
 
@@ -454,8 +449,7 @@ resource "aws_route53_record" "validation" {
       name   = dvo.resource_record_name
       record = dvo.resource_record_value
       type   = dvo.resource_record_type
-      
-    } 
+    }
   }
   allow_overwrite = true
   name            = each.value.name

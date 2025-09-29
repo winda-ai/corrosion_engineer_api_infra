@@ -78,30 +78,13 @@ variable "cpu_target_utilization" {
 variable "zone_id" {
   description = "Existing public Route53 Hosted Zone ID (record will always be created)"
   type        = string
+  default     = "Z045078216NP3O5K1Q0OY"
 }
 
 variable "subdomain" {
   description = "Subdomain to create (e.g., api)"
   type        = string
   default     = "api"
-}
-
-variable "enable_https" {
-  description = "Whether to provision HTTPS listener (requires ACM cert ARN)"
-  type        = bool
-  default     = true
-}
-
-variable "acm_certificate_arn" {
-  description = "ACM certificate ARN for HTTPS listener (in same region as ALB)"
-  type        = string
-  default     = ""
-}
-
-variable "log_retention_days" {
-  description = "CloudWatch log retention in days"
-  type        = number
-  default     = 30
 }
 
 variable "tags" {

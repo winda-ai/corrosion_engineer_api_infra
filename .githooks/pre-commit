@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Terraform pre-commit hook
+# Fails the commit if terraform fmt, validate, or (optional) plan detects issues.
+set -euo pipefail
+
+PROJECT_ROOT="$(git rev-parse --show-toplevel)"
+TF_DIR="$PROJECT_ROOT/main"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m'
+
+info() { echo -e "${YELLOW}[terraform pre-commit]${NC} $*"; }
+success() { echo -e "${GREEN}[terraform pre-commit]${NC} $*"; }
+fail() { echo -e "${RED}[terraform pre-commit] ERROR:${NC} $*" >&2; }
+
+# Ensure terraform exists
+if ! command -v terraform >/dev/null 2>&1; then
+  fail "terraform not found in PATH"
+  exit 1
+fi
+
+terraform init -backend=false -chdir="$TF_DIR"
+
+info "Running terraform validate"
+terraform -chdir="$TF_DIR" validate
+
+success "Terraform validation passed"

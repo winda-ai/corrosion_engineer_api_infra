@@ -24,3 +24,9 @@ validate:
 clean:
 	find main -name '*.tfstate*' -delete
 	find main -name '.terraform' -type d -exec rm -rf {} +
+
+install-hooks:
+	@echo "Installing git hooks..."
+	@cp .githooks/pre-commit .git/hooks/pre-commit
+	@chmod +x .git/hooks/pre-commit
+	@echo "Pre-commit hook installed."
