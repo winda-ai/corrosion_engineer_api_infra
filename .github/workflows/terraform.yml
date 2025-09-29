@@ -41,6 +41,12 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Configuration precedence (highest to lowest): workflow_dispatch inputs > repository/org variables > defaults
+    # Define repository/org variables under: Settings > Variables > Actions (e.g., TF_REGION, TF_ENV, TF_ACTION)
+    env:
+      TF_REGION: ${{ github.event_name == 'workflow_dispatch' && inputs.region || 'us-east-1' }}
+      TF_ENVIRONMENT: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}
+      TF_ACTION: ${{ github.event_name == 'workflow_dispatch' && inputs.action || 'plan' }}
     
     steps:
     - name: Checkout code
@@ -51,7 +57,7 @@ jobs:
       with:
         role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
         role-session-name: GitHubActions
-        aws-region: ${{ github.event.inputs.region }}
+        aws-region: ${{ env.TF_REGION }}
 
     - name: Verify AWS identity
       run: |
@@ -64,37 +70,37 @@ jobs:
         terraform_version: 1.8.5
 
     - name: Init (explicit)
-      run: make init ENV=${{ github.event.inputs.environment }} REGION=${{ github.event.inputs.region }}
+      run: make init ENV=${{ env.TF_ENVIRONMENT }} REGION=${{ env.TF_REGION }}
 
     - name: Validate
-      run: make validate ENV=${{ github.event.inputs.environment }} REGION=${{ github.event.inputs.region }}
+      run: make validate ENV=${{ env.TF_ENVIRONMENT }} REGION=${{ env.TF_REGION }}
 
     - name: Plan (human readable)
-      if: ${{ github.event.inputs.action == 'plan' }}
-      run: make plan ENV=${{ github.event.inputs.environment }} REGION=${{ github.event.inputs.region }}
+      if: ${{ env.TF_ACTION == 'plan' }}
+      run: make plan ENV=${{ env.TF_ENVIRONMENT }} REGION=${{ env.TF_REGION }}
 
     - name: Plan (save binary)
-      if: ${{ github.event.inputs.action == 'plan' }}
-      run: make plan-save ENV=${{ github.event.inputs.environment }} REGION=${{ github.event.inputs.region }}
+      if: ${{ env.TF_ACTION == 'plan' }}
+      run: make plan-save ENV=${{ env.TF_ENVIRONMENT }} REGION=${{ env.TF_REGION }}
 
     - name: Apply
-      if: ${{ github.event.inputs.action == 'apply' }}
-      run: make apply ENV=${{ github.event.inputs.environment }} REGION=${{ github.event.inputs.region }}
+      if: ${{ env.TF_ACTION == 'apply' }}
+      run: make apply ENV=${{ env.TF_ENVIRONMENT }} REGION=${{ env.TF_REGION }}
 
     - name: Destroy
-      if: ${{ github.event.inputs.action == 'destroy' }}
-      run: make destroy ENV=${{ github.event.inputs.environment }} REGION=${{ github.event.inputs.region }}
+      if: ${{ env.TF_ACTION == 'destroy' }}
+      run: make destroy ENV=${{ env.TF_ENVIRONMENT }} REGION=${{ env.TF_REGION }}
 
     - name: Show Outputs (plan/apply only)
-      if: ${{ github.event.inputs.action != 'destroy' }}
-      run: make outputs ENV=${{ github.event.inputs.environment }} | tee outputs.txt
+      if: ${{ env.TF_ACTION != 'destroy' }}
+      run: make outputs ENV=${{ env.TF_ENVIRONMENT }} | tee outputs.txt
 
     - name: Post Run Summary
       if: always()
       run: |
-        echo "Action: ${{ github.event.inputs.action }}" >> $GITHUB_STEP_SUMMARY
-        echo "Environment: ${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY
-        echo "Backend: ${{ steps.backend.outputs.backend_path }}" >> $GITHUB_STEP_SUMMARY
+        echo "Action: ${{ env.TF_ACTION }}" >> $GITHUB_STEP_SUMMARY
+        echo "Environment: ${{ env.TF_ENVIRONMENT }}" >> $GITHUB_STEP_SUMMARY
+        echo "Region: ${{ env.TF_REGION }}" >> $GITHUB_STEP_SUMMARY
         if [ -f src/tfplan ]; then echo "Plan artifact: src/tfplan" >> $GITHUB_STEP_SUMMARY; fi
 
 
