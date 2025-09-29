@@ -42,7 +42,7 @@ variable "container_image" {
 variable "container_port" {
   description = "Application container port"
   type        = number
-  default     = 80
+  default     = 8080
 }
 
 variable "health_check_path" {
