@@ -1,0 +1,99 @@
+name: Deploy to AWS
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+        region:
+            description: "AWS region to deploy to"
+            required: true
+            default: us-east-1
+            type: choice
+            options:
+            - us-east-1
+            - us-west-2
+        environment:
+            description: "Target environment (matches directory under workspace/, e.g. dev, prod)"
+            required: true
+            default: dev
+            type: choice
+            options:
+            - dev
+        action:
+            description: "Terraform action to perform"
+            required: true
+            default: plan
+            type: choice
+            options:
+            - plan
+            - apply
+            - destroy
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write  # For PR comments
+
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        role-session-name: GitHubActions
+        aws-region: ${{ github.event.inputs.region }}
+
+    - name: Verify AWS identity
+      run: |
+        aws sts get-caller-identity
+        echo "AWS CLI configured successfully"
+
+    - name: Set up Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.8.5
+
+    - name: Init (explicit)
+      run: make init ENV=${{ github.event.inputs.environment }} REGION=${{ github.event.inputs.region }}
+
+    - name: Validate
+      run: make validate ENV=${{ github.event.inputs.environment }} REGION=${{ github.event.inputs.region }}
+
+    - name: Plan (human readable)
+      if: ${{ github.event.inputs.action == 'plan' }}
+      run: make plan ENV=${{ github.event.inputs.environment }} REGION=${{ github.event.inputs.region }}
+
+    - name: Plan (save binary)
+      if: ${{ github.event.inputs.action == 'plan' }}
+      run: make plan-save ENV=${{ github.event.inputs.environment }} REGION=${{ github.event.inputs.region }}
+
+    - name: Apply
+      if: ${{ github.event.inputs.action == 'apply' }}
+      run: make apply ENV=${{ github.event.inputs.environment }} REGION=${{ github.event.inputs.region }}
+
+    - name: Destroy
+      if: ${{ github.event.inputs.action == 'destroy' }}
+      run: make destroy ENV=${{ github.event.inputs.environment }} REGION=${{ github.event.inputs.region }}
+
+    - name: Show Outputs (plan/apply only)
+      if: ${{ github.event.inputs.action != 'destroy' }}
+      run: make outputs ENV=${{ github.event.inputs.environment }} | tee outputs.txt
+
+    - name: Post Run Summary
+      if: always()
+      run: |
+        echo "Action: ${{ github.event.inputs.action }}" >> $GITHUB_STEP_SUMMARY
+        echo "Environment: ${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+        echo "Backend: ${{ steps.backend.outputs.backend_path }}" >> $GITHUB_STEP_SUMMARY
+        if [ -f src/tfplan ]; then echo "Plan artifact: src/tfplan" >> $GITHUB_STEP_SUMMARY; fi
+
+
+

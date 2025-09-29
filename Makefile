@@ -1,29 +1,26 @@
 REGION ?= us-east-1
 ENV ?= dev
+BACKEND_CONFIG = ../workspace/$(ENV)/$(REGION)/backend.conf
+VARS_FILE = ../workspace/$(ENV)/$(REGION)/terraform.tfvars
 
-tf-init:
-	terraform -chdir=main init -backend-config=../stages/$(ENV)/$(REGION)/backend.conf -force-copy
+init:
+	terraform -chdir=./main init -backend-config=$(BACKEND_CONFIG)
 
-tf-plan:
-	terraform -chdir=main plan \
-	-out tf.plan \
-	-var-file=../stages/$(ENV)/tier.tfvars \
-	-var-file=../stages/$(ENV)/$(REGION)/inputs.tfvars
+plan:
+	terraform -chdir=./main plan -var-file=$(VARS_FILE)
 
-tf-apply-from-plan:
-	terraform -chdir=main apply tf.plan
+apply:
+	terraform -chdir=./main apply -auto-approve -var-file=$(VARS_FILE)
 
-tf-plan-destroy:
-	terraform -chdir=main plan -destroy \
-	-var-file=../stages/$(ENV)/tier.tfvars \
-	-var-file=../stages/$(ENV)/$(REGION)/inputs.tfvars
+destroy:
+	terraform -chdir=./main destroy -auto-approve -var-file=$(VARS_FILE)
 
-tf-destroy:
-	terraform -chdir=main destroy -auto-approve \
-	-var-file=../stages/$(ENV)/tier.tfvars \
-	-var-file=../stages/$(ENV)/$(REGION)/inputs.tfvars
+outputs:
+	terraform -chdir=./main output
+
+validate:
+	terraform -chdir=$(TF_DIR) validate
 
 clean:
-	rm -f main/tf.plan
-	rm -rf main/.terraform
-	rm -f main/.terraform.lock.hcl
+	find $(TF_DIR) -name '*.tfstate*' -delete
+	find $(TF_DIR) -name '.terraform' -type d -exec rm -rf {} +
