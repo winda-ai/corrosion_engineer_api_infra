@@ -22,6 +22,8 @@ if ! command -v terraform >/dev/null 2>&1; then
   exit 1
 fi
 
+terraform -chdir="$TF_DIR" fmt -recursive
+
 terraform init -backend=false -chdir="$TF_DIR"
 
 info "Running terraform validate"

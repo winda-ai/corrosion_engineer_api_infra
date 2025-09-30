@@ -173,9 +173,13 @@ resource "aws_iam_role_policy" "task_execution_github_pull" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = "arn:aws:secretsmanager:${var.aws_region}:*:*:github_token"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "kms:Decrypt"
+        ]
+        Resource = ["arn:aws:secretsmanager:us-east-1:*:*:github_token_ecs",
+        "arn:aws:kms:us-east-1:*:key/*"]
       }
     ]
   })
@@ -256,7 +260,7 @@ resource "aws_ecs_task_definition" "app" {
 
   container_definitions = jsonencode([
     {
-      name      = "app"
+      name      = "corrosion-engineer-api"
       image     = var.container_image
       essential = true
       portMappings = [
@@ -284,7 +288,7 @@ resource "aws_ecs_task_definition" "app" {
         startPeriod = 10
       }
       repositoryCredentials = {
-        credentialsParameter = "arn:aws:secretsmanager:${var.aws_region}:*:*:github_token"
+        credentialsParameter = "arn:aws:secretsmanager:us-east-1:304035490047:secret:github_token_ecs"
       }
     }
   ])
