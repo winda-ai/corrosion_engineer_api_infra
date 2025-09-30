@@ -304,7 +304,7 @@ resource "aws_ecs_task_definition" "app" {
 ///////////////////////////////////////////////
 
 resource "aws_lb" "app" {
-  name               = "${var.name_prefix}-alb"
+  name               = "${var.name_prefix}-corrosion-engineer-api-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -361,7 +361,7 @@ resource "aws_lb_listener" "https" {
 ///////////////////////////////////////////////
 
 resource "aws_ecs_service" "app" {
-  name                   = "${var.name_prefix}-app-service"
+  name                   = "${var.name_prefix}-corrosion-engineer-api-service"
   cluster                = aws_ecs_cluster.this.id
   task_definition        = aws_ecs_task_definition.app.arn
   desired_count          = var.desired_count
