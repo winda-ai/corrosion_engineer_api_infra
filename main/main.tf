@@ -304,7 +304,7 @@ resource "aws_ecs_task_definition" "app" {
 ///////////////////////////////////////////////
 
 resource "aws_lb" "app" {
-  name               = "${var.name_prefix}-corrosion-engineer-api-alb"
+  name               = "${var.name_prefix}-ce-api-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]

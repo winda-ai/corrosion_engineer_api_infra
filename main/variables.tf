@@ -84,7 +84,6 @@ variable "zone_id" {
 variable "subdomain" {
   description = "Subdomain to create (e.g., api)"
   type        = string
-  default     = "api"
 }
 
 variable "extra_env_vars" {
