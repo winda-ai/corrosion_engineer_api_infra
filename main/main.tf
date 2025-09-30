@@ -165,6 +165,22 @@ resource "aws_iam_role" "task_execution" {
   tags               = local.common_tags
 }
 
+# Allow ECS to pull private images from GHCR using github_token secret
+resource "aws_iam_role_policy" "task_execution_github_pull" {
+  name = "${var.name_prefix}-ecs-ghcr-pull"
+  role = aws_iam_role.task_execution.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:*:*:github_token"
+      }
+    ]
+  })
+}
+
 data "aws_iam_policy_document" "task_execution_assume" {
   statement {
     effect = "Allow"
@@ -220,7 +236,7 @@ resource "aws_cloudwatch_log_group" "app" {
 ///////////////////////////////////////////////
 
 resource "aws_ecs_cluster" "this" {
-  name = "${var.name_prefix}-cluster"
+  name = "${var.name_prefix}-corrosion-engineer-api-cluster"
   setting {
     name  = "containerInsights"
     value = "enabled"
@@ -266,6 +282,9 @@ resource "aws_ecs_task_definition" "app" {
         timeout     = 5
         retries     = 3
         startPeriod = 10
+      }
+      repositoryCredentials = {
+        credentialsParameter = "arn:aws:secretsmanager:${var.aws_region}:*:*:github_token"
       }
     }
   ])
