@@ -260,7 +260,7 @@ resource "aws_ecs_task_definition" "app" {
 
   container_definitions = jsonencode([
     {
-      name      = "corrosion-engineer-api"
+      name      = "app"
       image     = var.container_image
       essential = true
       portMappings = [
