@@ -178,8 +178,10 @@ resource "aws_iam_role_policy" "task_execution_github_pull" {
           "secretsmanager:GetSecretValue",
           "kms:Decrypt"
         ]
-        Resource = ["arn:aws:secretsmanager:us-east-1:*:*:github_token_ecs",
-        "arn:aws:kms:us-east-1:*:key/*"]
+        Resource = [
+          "arn:aws:secretsmanager:us-east-1:304035490047:secret:github_token_ecs*",
+          "arn:aws:kms:us-east-1:*:key/*"
+        ]
       }
     ]
   })
@@ -277,9 +279,10 @@ resource "aws_ecs_task_definition" "app" {
           awslogs-stream-prefix = "ecs"
         }
       }
-      environment = [
-        { name = "ASPNETCORE_ENVIRONMENT", value = var.environment }
-      ]
+      environment = concat([
+        { name = "ASPNETCORE_ENVIRONMENT", value = var.environment },
+        { name = "PORT", value = tostring(var.container_port) }
+      ], var.extra_env_vars)
       healthCheck = {
         command     = ["CMD-SHELL", "curl -f http://localhost:${var.container_port}${var.health_check_path} || exit 1"]
         interval    = 30

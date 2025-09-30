@@ -87,6 +87,12 @@ variable "subdomain" {
   default     = "api"
 }
 
+variable "extra_env_vars" {
+  description = "Additional environment variables for the ECS container (list of maps with name/value)"
+  type        = list(object({ name = string, value = string }))
+  default     = []
+}
+
 variable "tags" {
   description = "Additional tags to apply to all resources"
   type        = map(string)
