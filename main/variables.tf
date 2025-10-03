@@ -92,6 +92,42 @@ variable "extra_env_vars" {
   default     = []
 }
 
+variable "use_fargate_spot" {
+  description = "Use Fargate Spot for cost savings (can be interrupted)"
+  type        = bool
+  default     = true
+}
+
+variable "fargate_spot_percentage" {
+  description = "Percentage of tasks to run on Spot (0-100). Remainder runs on on-demand Fargate"
+  type        = number
+  default     = 70
+}
+
+variable "enable_hibernation_schedule" {
+  description = "Enable scheduled scaling to scale down during off-hours"
+  type        = bool
+  default     = false
+}
+
+variable "hibernation_start_cron" {
+  description = "Cron expression for when to scale down (UTC). Example: 'cron(0 22 * * ? *)' = 10 PM UTC daily"
+  type        = string
+  default     = "cron(0 22 * * ? *)"
+}
+
+variable "hibernation_end_cron" {
+  description = "Cron expression for when to scale back up (UTC). Example: 'cron(0 6 * * ? *)' = 6 AM UTC daily"
+  type        = string
+  default     = "cron(0 6 * * ? *)"
+}
+
+variable "hibernation_min_capacity" {
+  description = "Minimum capacity during hibernation (set to 0 to fully stop)"
+  type        = number
+  default     = 0
+}
+
 variable "tags" {
   description = "Additional tags to apply to all resources"
   type        = map(string)

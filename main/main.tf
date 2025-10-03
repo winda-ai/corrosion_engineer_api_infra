@@ -360,13 +360,66 @@ resource "aws_lb_listener" "https" {
 // ECS Service with Autoscaling
 ///////////////////////////////////////////////
 
+# Fargate Spot Capacity Provider
+resource "aws_ecs_capacity_provider" "fargate_spot" {
+  count = var.use_fargate_spot ? 1 : 0
+  name  = "${var.name_prefix}-fargate-spot"
+
+  auto_scaling_group_provider {
+    auto_scaling_group_arn = ""
+  }
+}
+
+# Cluster Capacity Providers (Spot + On-Demand)
+resource "aws_ecs_cluster_capacity_providers" "this" {
+  cluster_name = aws_ecs_cluster.this.name
+
+  capacity_providers = var.use_fargate_spot ? ["FARGATE_SPOT", "FARGATE"] : ["FARGATE"]
+
+  default_capacity_provider_strategy {
+    capacity_provider = var.use_fargate_spot ? "FARGATE_SPOT" : "FARGATE"
+    weight            = var.use_fargate_spot ? var.fargate_spot_percentage : 100
+    base              = 0
+  }
+
+  dynamic "default_capacity_provider_strategy" {
+    for_each = var.use_fargate_spot && var.fargate_spot_percentage < 100 ? [1] : []
+    content {
+      capacity_provider = "FARGATE"
+      weight            = 100 - var.fargate_spot_percentage
+      base              = 0
+    }
+  }
+}
+
 resource "aws_ecs_service" "app" {
   name                   = "${var.name_prefix}-corrosion-engineer-api-service"
   cluster                = aws_ecs_cluster.this.id
   task_definition        = aws_ecs_task_definition.app.arn
   desired_count          = var.desired_count
-  launch_type            = "FARGATE"
   enable_execute_command = true
+
+  # Use capacity provider strategy instead of launch_type
+  dynamic "capacity_provider_strategy" {
+    for_each = var.use_fargate_spot ? [1] : []
+    content {
+      capacity_provider = "FARGATE_SPOT"
+      weight            = var.fargate_spot_percentage
+      base              = 0
+    }
+  }
+
+  dynamic "capacity_provider_strategy" {
+    for_each = var.use_fargate_spot && var.fargate_spot_percentage < 100 ? [1] : []
+    content {
+      capacity_provider = "FARGATE"
+      weight            = 100 - var.fargate_spot_percentage
+      base              = 0
+    }
+  }
+
+  # Fallback to on-demand if spot disabled
+  launch_type = var.use_fargate_spot ? null : "FARGATE"
 
   network_configuration {
     subnets          = [for s in aws_subnet.private : s.id]
@@ -387,7 +440,7 @@ resource "aws_ecs_service" "app" {
   deployment_minimum_healthy_percent = 50
   deployment_maximum_percent         = 200
 
-  depends_on = [aws_lb_listener.http]
+  depends_on = [aws_lb_listener.http, aws_ecs_cluster_capacity_providers.this]
 
   tags = merge(local.common_tags, { Name = "${var.name_prefix}-ecs-service" })
 }
@@ -416,6 +469,35 @@ resource "aws_appautoscaling_policy" "cpu" {
     target_value       = var.cpu_target_utilization
     scale_in_cooldown  = 60
     scale_out_cooldown = 60
+  }
+}
+
+# Scheduled Scaling for Hibernation (optional cost savings)
+resource "aws_appautoscaling_scheduled_action" "scale_down" {
+  count              = var.enable_hibernation_schedule ? 1 : 0
+  name               = "${var.name_prefix}-scale-down-night"
+  service_namespace  = aws_appautoscaling_target.ecs.service_namespace
+  resource_id        = aws_appautoscaling_target.ecs.resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs.scalable_dimension
+  schedule           = var.hibernation_start_cron
+
+  scalable_target_action {
+    min_capacity = var.hibernation_min_capacity
+    max_capacity = var.hibernation_min_capacity
+  }
+}
+
+resource "aws_appautoscaling_scheduled_action" "scale_up" {
+  count              = var.enable_hibernation_schedule ? 1 : 0
+  name               = "${var.name_prefix}-scale-up-morning"
+  service_namespace  = aws_appautoscaling_target.ecs.service_namespace
+  resource_id        = aws_appautoscaling_target.ecs.resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs.scalable_dimension
+  schedule           = var.hibernation_end_cron
+
+  scalable_target_action {
+    min_capacity = var.min_capacity
+    max_capacity = var.max_capacity
   }
 }
 
