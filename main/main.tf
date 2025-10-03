@@ -398,6 +398,7 @@ resource "aws_ecs_service" "app" {
   task_definition        = aws_ecs_task_definition.app.arn
   desired_count          = var.desired_count
   enable_execute_command = true
+  force_new_deployment   = true
 
   # Use capacity provider strategy instead of launch_type
   dynamic "capacity_provider_strategy" {
