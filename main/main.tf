@@ -406,12 +406,13 @@ resource "aws_lb_listener" "https" {
 # ECS Service
 # ============================================================
 resource "aws_ecs_service" "app" {
-  name                 = "${var.name_prefix}-corrosion-engineer-api-service"
-  cluster              = aws_ecs_cluster.this.id
-  task_definition      = aws_ecs_task_definition.app.arn
-  desired_count        = var.desired_count
-  launch_type          = null # Use capacity provider strategy instead
-  force_new_deployment = true
+  name                   = "${var.name_prefix}-corrosion-engineer-api-service"
+  cluster                = aws_ecs_cluster.this.id
+  task_definition        = aws_ecs_task_definition.app.arn
+  desired_count          = var.desired_count
+  launch_type            = null # Use capacity provider strategy instead
+  force_new_deployment   = true
+  enable_execute_command = true
   # Use the cluster's default capacity provider strategy
   # (configured via aws_ecs_cluster_capacity_providers above)
 
