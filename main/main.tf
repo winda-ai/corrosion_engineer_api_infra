@@ -244,7 +244,7 @@ resource "aws_cloudwatch_log_group" "app" {
 # ============================================================
 # ECS Cluster
 # ============================================================
-resource "aws_ecs_cluster" "main" {
+resource "aws_ecs_cluster" "this" {
   name = "${var.name_prefix}-cluster"
 
   setting {
@@ -258,8 +258,8 @@ resource "aws_ecs_cluster" "main" {
 }
 
 # Attach AWS-managed Fargate capacity providers to the cluster
-resource "aws_ecs_cluster_capacity_providers" "main" {
-  cluster_name = aws_ecs_cluster.main.name
+resource "aws_ecs_cluster_capacity_providers" "this" {
+  cluster_name = aws_ecs_cluster.this.name
 
   # Use AWS-managed capacity providers (no need to create them)
   capacity_providers = var.use_fargate_spot ? ["FARGATE", "FARGATE_SPOT"] : ["FARGATE"]
@@ -407,7 +407,7 @@ resource "aws_lb_listener" "https" {
 # ============================================================
 resource "aws_ecs_service" "app" {
   name                 = "${var.name_prefix}-app-service"
-  cluster              = aws_ecs_cluster.main.id
+  cluster              = aws_ecs_cluster.this.id
   task_definition      = aws_ecs_task_definition.app.arn
   desired_count        = var.desired_count
   launch_type          = null # Use capacity provider strategy instead
@@ -429,7 +429,7 @@ resource "aws_ecs_service" "app" {
 
   depends_on = [
     aws_lb_listener.http,
-    aws_ecs_cluster_capacity_providers.main
+    aws_ecs_cluster_capacity_providers.this
   ]
 
   lifecycle {
@@ -445,7 +445,7 @@ resource "aws_ecs_service" "app" {
 resource "aws_appautoscaling_target" "ecs" {
   max_capacity       = var.max_capacity
   min_capacity       = var.min_capacity
-  resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.app.name}"
+  resource_id        = "service/${aws_ecs_cluster.this.name}/${aws_ecs_service.app.name}"
   scalable_dimension = "ecs:service:DesiredCount"
   service_namespace  = "ecs"
 }
