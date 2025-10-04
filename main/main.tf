@@ -437,7 +437,7 @@ resource "aws_ecs_service" "app" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.name_prefix}-app-service"
+    Name = "${var.name_prefix}-ecs-service"
   })
 }
 
