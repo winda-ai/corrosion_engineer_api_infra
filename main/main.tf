@@ -406,7 +406,7 @@ resource "aws_lb_listener" "https" {
 # ECS Service
 # ============================================================
 resource "aws_ecs_service" "app" {
-  name                 = "${var.name_prefix}-app-service"
+  name                 = "${var.name_prefix}-corrosion-engineer-api-service"
   cluster              = aws_ecs_cluster.this.id
   task_definition      = aws_ecs_task_definition.app.arn
   desired_count        = var.desired_count
