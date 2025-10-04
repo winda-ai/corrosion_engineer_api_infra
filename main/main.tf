@@ -241,13 +241,55 @@ resource "aws_cloudwatch_log_group" "app" {
 // ECS Cluster & Task Definition
 ///////////////////////////////////////////////
 
-resource "aws_ecs_cluster" "this" {
-  name = "${var.name_prefix}-corrosion-engineer-api-cluster"
+# ============================================================
+# ECS Cluster
+# ============================================================
+resource "aws_ecs_cluster" "main" {
+  name = "${var.name_prefix}-cluster"
+
   setting {
     name  = "containerInsights"
     value = "enabled"
   }
-  tags = merge(local.common_tags, { Name = "${var.name_prefix}-ecs-cluster" })
+
+  tags = merge(local.common_tags, {
+    Name = "${var.name_prefix}-cluster"
+  })
+}
+
+# Attach AWS-managed Fargate capacity providers to the cluster
+resource "aws_ecs_cluster_capacity_providers" "main" {
+  cluster_name = aws_ecs_cluster.main.name
+
+  # Use AWS-managed capacity providers (no need to create them)
+  capacity_providers = var.use_fargate_spot ? ["FARGATE", "FARGATE_SPOT"] : ["FARGATE"]
+
+  dynamic "default_capacity_provider_strategy" {
+    for_each = var.use_fargate_spot ? [1] : []
+    content {
+      capacity_provider = "FARGATE_SPOT"
+      weight            = var.fargate_spot_percentage
+      base              = 0
+    }
+  }
+
+  dynamic "default_capacity_provider_strategy" {
+    for_each = var.use_fargate_spot ? [1] : []
+    content {
+      capacity_provider = "FARGATE"
+      weight            = 100 - var.fargate_spot_percentage
+      base              = var.desired_count > 0 ? 1 : 0 # At least 1 on-demand for stability
+    }
+  }
+
+  dynamic "default_capacity_provider_strategy" {
+    for_each = var.use_fargate_spot ? [] : [1]
+    content {
+      capacity_provider = "FARGATE"
+      weight            = 100
+      base              = 1
+    }
+  }
 }
 
 # Task Definition
@@ -360,70 +402,21 @@ resource "aws_lb_listener" "https" {
 // ECS Service with Autoscaling
 ///////////////////////////////////////////////
 
-# Fargate Spot Capacity Provider
-resource "aws_ecs_capacity_provider" "fargate_spot" {
-  count = var.use_fargate_spot ? 1 : 0
-  name  = "${var.name_prefix}-fargate-spot"
-
-  auto_scaling_group_provider {
-    auto_scaling_group_arn = ""
-  }
-}
-
-# Cluster Capacity Providers (Spot + On-Demand)
-resource "aws_ecs_cluster_capacity_providers" "this" {
-  cluster_name = aws_ecs_cluster.this.name
-
-  capacity_providers = var.use_fargate_spot ? ["FARGATE_SPOT", "FARGATE"] : ["FARGATE"]
-
-  default_capacity_provider_strategy {
-    capacity_provider = var.use_fargate_spot ? "FARGATE_SPOT" : "FARGATE"
-    weight            = var.use_fargate_spot ? var.fargate_spot_percentage : 100
-    base              = 0
-  }
-
-  dynamic "default_capacity_provider_strategy" {
-    for_each = var.use_fargate_spot && var.fargate_spot_percentage < 100 ? [1] : []
-    content {
-      capacity_provider = "FARGATE"
-      weight            = 100 - var.fargate_spot_percentage
-      base              = 0
-    }
-  }
-}
-
+# ============================================================
+# ECS Service
+# ============================================================
 resource "aws_ecs_service" "app" {
-  name                   = "${var.name_prefix}-corrosion-engineer-api-service"
-  cluster                = aws_ecs_cluster.this.id
-  task_definition        = aws_ecs_task_definition.app.arn
-  desired_count          = var.desired_count
-  enable_execute_command = true
-  force_new_deployment   = true
-
-  # Use capacity provider strategy instead of launch_type
-  dynamic "capacity_provider_strategy" {
-    for_each = var.use_fargate_spot ? [1] : []
-    content {
-      capacity_provider = "FARGATE_SPOT"
-      weight            = var.fargate_spot_percentage
-      base              = 0
-    }
-  }
-
-  dynamic "capacity_provider_strategy" {
-    for_each = var.use_fargate_spot && var.fargate_spot_percentage < 100 ? [1] : []
-    content {
-      capacity_provider = "FARGATE"
-      weight            = 100 - var.fargate_spot_percentage
-      base              = 0
-    }
-  }
-
-  # Fallback to on-demand if spot disabled
-  launch_type = var.use_fargate_spot ? null : "FARGATE"
+  name                 = "${var.name_prefix}-app-service"
+  cluster              = aws_ecs_cluster.main.id
+  task_definition      = aws_ecs_task_definition.app.arn
+  desired_count        = var.desired_count
+  launch_type          = null # Use capacity provider strategy instead
+  force_new_deployment = true
+  # Use the cluster's default capacity provider strategy
+  # (configured via aws_ecs_cluster_capacity_providers above)
 
   network_configuration {
-    subnets          = [for s in aws_subnet.private : s.id]
+    subnets          = aws_subnet.private[*].id
     security_groups  = [aws_security_group.ecs_tasks.id]
     assign_public_ip = false
   }
@@ -434,23 +427,25 @@ resource "aws_ecs_service" "app" {
     container_port   = var.container_port
   }
 
+  depends_on = [
+    aws_lb_listener.http,
+    aws_ecs_cluster_capacity_providers.main
+  ]
+
   lifecycle {
-    ignore_changes = [desired_count] # managed by autoscaling
+    ignore_changes = [desired_count] # Allow autoscaling to manage this
   }
 
-  deployment_minimum_healthy_percent = 50
-  deployment_maximum_percent         = 200
-
-  depends_on = [aws_lb_listener.http, aws_ecs_cluster_capacity_providers.this]
-
-  tags = merge(local.common_tags, { Name = "${var.name_prefix}-ecs-service" })
+  tags = merge(local.common_tags, {
+    Name = "${var.name_prefix}-app-service"
+  })
 }
 
 # Application Autoscaling target
 resource "aws_appautoscaling_target" "ecs" {
   max_capacity       = var.max_capacity
   min_capacity       = var.min_capacity
-  resource_id        = "service/${aws_ecs_cluster.this.name}/${aws_ecs_service.app.name}"
+  resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.app.name}"
   scalable_dimension = "ecs:service:DesiredCount"
   service_namespace  = "ecs"
 }
@@ -566,4 +561,4 @@ resource "aws_route53_record" "validation" {
   ttl             = 60
   type            = each.value.type
   zone_id         = data.aws_route53_zone.selected.zone_id
-} 
+}
