@@ -15,23 +15,28 @@ variable "name_prefix" {
   type        = string
   default     = "ce"
 }
-
-variable "vpc_cidr" {
-  description = "CIDR block for the VPC"
+variable "ecs_cluster_name" {
+  description = "Name of the existing ECS Cluster to deploy the service into"
   type        = string
-  default     = "10.20.0.0/16"
+  default     = "central"
 }
 
-variable "public_subnet_cidrs" {
-  description = "List of public subnet CIDR blocks (must span at least 2 AZs)"
-  type        = list(string)
-  default     = ["10.20.1.0/24", "10.20.2.0/24"]
+variable "vpc_id" {
+  description = "ID of the existing VPC to deploy resources into"
+  type        = string
+  default     = "vpc-0bb1c79de3EXAMPLE"
 }
 
-variable "private_subnet_cidrs" {
-  description = "List of private subnet CIDR blocks (must span at least 2 AZs)"
+variable "public_subnet_ids" {
+  description = "List of public subnet IDs in the VPC for ALB"
   type        = list(string)
-  default     = ["10.20.11.0/24", "10.20.12.0/24"]
+  default     = ["subnet-0bb1c79de3EXAMPLE", "subnet-0bb1c79de3EXAMPLE"]
+}
+
+variable "private_subnet_ids" {
+  description = "List of private subnet IDs in the VPC for ECS tasks"
+  type        = list(string)
+  default     = ["subnet-0bb1c79de3EXAMPLE", "subnet-0bb1c79de3EXAMPLE"]
 }
 
 variable "container_image" {

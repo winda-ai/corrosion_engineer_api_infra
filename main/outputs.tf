@@ -1,6 +1,6 @@
 output "vpc_id" {
   description = "ID of the created VPC"
-  value       = aws_vpc.main.id
+  value       = data.aws_vpc.main.id
 }
 
 output "alb_dns_name" {
@@ -16,11 +16,6 @@ output "alb_arn" {
 output "service_name" {
   description = "ECS Service name"
   value       = aws_ecs_service.app.name
-}
-
-output "cluster_name" {
-  description = "ECS Cluster name"
-  value       = aws_ecs_cluster.this.name
 }
 
 output "task_definition_arn" {

@@ -1,94 +1,20 @@
-///////////////////////////////////////////////
-// Networking: VPC, Subnets, Routing, SGs
-///////////////////////////////////////////////
 
-# Fetch available AZs (limit to 2 for cost) 
-data "aws_availability_zones" "available" {
-  state = "available"
+data "aws_ecs_cluster" "central" {
+  cluster_name = var.ecs_cluster_name
 }
 
-locals {
-  azs = slice(data.aws_availability_zones.available.names, 0, 2)
+data "aws_vpc" "main" {
+  id = var.vpc_id
 }
 
-# VPC
-resource "aws_vpc" "main" {
-  cidr_block           = var.vpc_cidr
-  enable_dns_support   = true
-  enable_dns_hostnames = true
-  tags                 = merge(local.common_tags, { Name = "${var.name_prefix}-vpc" })
+data "aws_subnet" "public" {
+  count = length(var.public_subnet_ids)
+  id    = var.public_subnet_ids[count.index]
 }
 
-# Internet Gateway
-resource "aws_internet_gateway" "igw" {
-  vpc_id = aws_vpc.main.id
-  tags   = merge(local.common_tags, { Name = "${var.name_prefix}-igw" })
-}
-
-# Public Subnets
-resource "aws_subnet" "public" {
-  for_each                = { for idx, cidr in var.public_subnet_cidrs : idx => cidr }
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = each.value
-  availability_zone       = local.azs[tonumber(each.key)]
-  map_public_ip_on_launch = true
-  tags                    = merge(local.common_tags, { Name = "${var.name_prefix}-public-${each.key}", Tier = "public" })
-}
-
-# Private Subnets
-resource "aws_subnet" "private" {
-  for_each          = { for idx, cidr in var.private_subnet_cidrs : idx => cidr }
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = each.value
-  availability_zone = local.azs[tonumber(each.key)]
-  tags              = merge(local.common_tags, { Name = "${var.name_prefix}-private-${each.key}", Tier = "private" })
-}
-
-# Elastic IP for NAT
-resource "aws_eip" "nat" {
-  domain = "vpc"
-  tags   = merge(local.common_tags, { Name = "${var.name_prefix}-nat-eip" })
-}
-
-# NAT Gateway in first public subnet
-resource "aws_nat_gateway" "nat" {
-  allocation_id = aws_eip.nat.id
-  subnet_id     = values(aws_subnet.public)[0].id
-  tags          = merge(local.common_tags, { Name = "${var.name_prefix}-nat" })
-  depends_on    = [aws_internet_gateway.igw]
-}
-
-# Route Tables
-resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.main.id
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.igw.id
-  }
-  tags = merge(local.common_tags, { Name = "${var.name_prefix}-public-rt" })
-}
-
-resource "aws_route_table_association" "public_assoc" {
-  for_each       = aws_subnet.public
-  subnet_id      = each.value.id
-  route_table_id = aws_route_table.public.id
-}
-
-resource "aws_route_table" "private" {
-  vpc_id = aws_vpc.main.id
-  tags   = merge(local.common_tags, { Name = "${var.name_prefix}-private-rt" })
-}
-
-resource "aws_route" "private_nat" {
-  route_table_id         = aws_route_table.private.id
-  destination_cidr_block = "0.0.0.0/0"
-  nat_gateway_id         = aws_nat_gateway.nat.id
-}
-
-resource "aws_route_table_association" "private_assoc" {
-  for_each       = aws_subnet.private
-  subnet_id      = each.value.id
-  route_table_id = aws_route_table.private.id
+data "aws_subnet" "private" {
+  count = length(var.private_subnet_ids)
+  id    = var.private_subnet_ids[count.index]
 }
 
 ///////////////////////////////////////////////
@@ -99,7 +25,7 @@ resource "aws_route_table_association" "private_assoc" {
 resource "aws_security_group" "alb" {
   name        = "${var.name_prefix}-alb-sg"
   description = "ALB security group"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = data.aws_vpc.main.id
 
   ingress {
     description      = "HTTP from internet"
@@ -134,7 +60,7 @@ resource "aws_security_group" "alb" {
 resource "aws_security_group" "ecs_tasks" {
   name        = "${var.name_prefix}-ecs-tasks-sg"
   description = "ECS tasks security group"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = data.aws_vpc.main.id
 
   ingress {
     description     = "App traffic from ALB"
@@ -244,53 +170,6 @@ resource "aws_cloudwatch_log_group" "app" {
 # ============================================================
 # ECS Cluster
 # ============================================================
-resource "aws_ecs_cluster" "this" {
-  name = "${var.name_prefix}-corrosion-engineer-api-cluster"
-
-  setting {
-    name  = "containerInsights"
-    value = "enabled"
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${var.name_prefix}-ecs-cluster"
-  })
-}
-
-# Attach AWS-managed Fargate capacity providers to the cluster
-resource "aws_ecs_cluster_capacity_providers" "this" {
-  cluster_name = aws_ecs_cluster.this.name
-
-  # Use AWS-managed capacity providers (no need to create them)
-  capacity_providers = var.use_fargate_spot ? ["FARGATE", "FARGATE_SPOT"] : ["FARGATE"]
-
-  dynamic "default_capacity_provider_strategy" {
-    for_each = var.use_fargate_spot ? [1] : []
-    content {
-      capacity_provider = "FARGATE_SPOT"
-      weight            = var.fargate_spot_percentage
-      base              = 0
-    }
-  }
-
-  dynamic "default_capacity_provider_strategy" {
-    for_each = var.use_fargate_spot ? [1] : []
-    content {
-      capacity_provider = "FARGATE"
-      weight            = 100 - var.fargate_spot_percentage
-      base              = var.desired_count > 0 ? 1 : 0 # At least 1 on-demand for stability
-    }
-  }
-
-  dynamic "default_capacity_provider_strategy" {
-    for_each = var.use_fargate_spot ? [] : [1]
-    content {
-      capacity_provider = "FARGATE"
-      weight            = 100
-      base              = 1
-    }
-  }
-}
 
 # Task Definition
 resource "aws_ecs_task_definition" "app" {
@@ -350,7 +229,7 @@ resource "aws_lb" "app" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
-  subnets            = [for s in aws_subnet.public : s.id]
+  subnets            = [for s in data.aws_subnet.public : s.id]
   idle_timeout       = 60
   tags               = merge(local.common_tags, { Name = "${var.name_prefix}-alb" })
 }
@@ -360,7 +239,7 @@ resource "aws_lb_target_group" "app" {
   port        = var.container_port
   protocol    = "HTTP"
   target_type = "ip"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = data.aws_vpc.main.id
   health_check {
     path                = var.health_check_path
     healthy_threshold   = 2
@@ -406,18 +285,19 @@ resource "aws_lb_listener" "https" {
 # ECS Service
 # ============================================================
 resource "aws_ecs_service" "app" {
-  name                   = "${var.name_prefix}-corrosion-engineer-api-service"
-  cluster                = aws_ecs_cluster.this.id
-  task_definition        = aws_ecs_task_definition.app.arn
-  desired_count          = var.desired_count
-  launch_type            = null # Use capacity provider strategy instead
-  force_new_deployment   = true
-  enable_execute_command = true
+  name                    = "${var.name_prefix}-corrosion-engineer-api-service"
+  cluster                 = data.aws_ecs_cluster.central.id
+  enable_ecs_managed_tags = true
+  task_definition         = aws_ecs_task_definition.app.arn
+  desired_count           = var.desired_count
+  launch_type             = null # Use capacity provider strategy instead
+  force_new_deployment    = true
+  enable_execute_command  = true
   # Use the cluster's default capacity provider strategy
   # (configured via aws_ecs_cluster_capacity_providers above)
 
   network_configuration {
-    subnets          = values(aws_subnet.private)[*].id
+    subnets          = values(data.aws_subnet.private)[*].id
     security_groups  = [aws_security_group.ecs_tasks.id]
     assign_public_ip = false
   }
@@ -430,7 +310,6 @@ resource "aws_ecs_service" "app" {
 
   depends_on = [
     aws_lb_listener.http,
-    aws_ecs_cluster_capacity_providers.this
   ]
 
   lifecycle {
@@ -446,7 +325,7 @@ resource "aws_ecs_service" "app" {
 resource "aws_appautoscaling_target" "ecs" {
   max_capacity       = var.max_capacity
   min_capacity       = var.min_capacity
-  resource_id        = "service/${aws_ecs_cluster.this.name}/${aws_ecs_service.app.name}"
+  resource_id        = "service/${var.ecs_cluster_name}/${aws_ecs_service.app.name}"
   scalable_dimension = "ecs:service:DesiredCount"
   service_namespace  = "ecs"
 }
