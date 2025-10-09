@@ -297,7 +297,7 @@ resource "aws_ecs_service" "app" {
   # (configured via aws_ecs_cluster_capacity_providers above)
 
   network_configuration {
-    subnets          = values(data.aws_subnet.private)[*].id
+    subnets          = data.aws_subnet.private[*].id
     security_groups  = [aws_security_group.ecs_tasks.id]
     assign_public_ip = false
   }
