@@ -11,6 +11,12 @@ variable "region" {
   type        = string
 }
 
+variable "assume_role_arn" {
+  description = "IAM role ARN to assume (used by GitHub Actions, leave empty for local development)"
+  type        = string
+  default     = "arn:aws:iam::304035490047:role/TerraformBackendRole"
+}
+
 variable "name_prefix" {
   description = "Prefix for resource naming"
   type        = string
@@ -31,25 +37,10 @@ variable "route53_zone_name" {
   default     = "winda.ai"
 }
 
-# ============================================================
-# Routing Strategy
-# ============================================================
-variable "enable_subdomain_routing" {
-  description = "Use subdomain routing (corrosion-engineer.dev.winda.ai) instead of path-based (/api/corrosion-engineer/*)"
-  type        = bool
-  default     = false
-}
-
 variable "listener_rule_priority" {
   description = "ALB listener rule priority (must be unique across all services, same across all regions)"
   type        = number
   default     = 100
-}
-
-variable "api_path_prefix" {
-  description = "Path prefix for path-based routing (only used if enable_subdomain_routing = false)"
-  type        = string
-  default     = "/api/corrosion-engineer/*"
 }
 
 variable "container_image" {

@@ -9,7 +9,11 @@ terraform {
   }
 }
 
-// AWS provider configuration. Versions and required providers are declared in versions.tf
+// AWS provider configuration
 provider "aws" {
   region = var.region
+
+  assume_role {
+    role_arn = var.assume_role_arn
+  }
 } 
