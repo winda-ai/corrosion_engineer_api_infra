@@ -1,42 +1,55 @@
-variable "aws_region" {
-  description = "The AWS region to deploy resources in"
+# ============================================================
+# Core Configuration
+# ============================================================
+variable "environment" {
+  description = "Deployment environment (dev, staging, prod)"
   type        = string
-  default     = "us-east-1"
 }
 
-variable "environment" {
-  description = "Deployment environment name (e.g., dev, staging, prod)"
+variable "region" {
+  description = "AWS region"
   type        = string
-  default     = "dev"
 }
 
 variable "name_prefix" {
-  description = "Prefix to use for naming AWS resources (replaces using environment as the name root)"
+  description = "Prefix for resource naming"
   type        = string
-  default     = "ce"
-}
-variable "ecs_cluster_name" {
-  description = "Name of the existing ECS Cluster to deploy the service into"
-  type        = string
-  default     = "central"
+  default     = "corrosion-engineer"
 }
 
-variable "vpc_id" {
-  description = "ID of the existing VPC to deploy resources into"
+# ============================================================
+# Central Infrastructure Reference
+# ============================================================
+variable "terraform_state_bucket" {
+  description = "S3 bucket where central infrastructure state is stored"
   type        = string
-  default     = "vpc-0bb1c79de3EXAMPLE"
 }
 
-variable "public_subnet_ids" {
-  description = "List of public subnet IDs in the VPC for ALB"
-  type        = list(string)
-  default     = ["subnet-0bb1c79de3EXAMPLE", "subnet-0bb1c79de3EXAMPLE"]
+variable "route53_zone_name" {
+  description = "Route53 hosted zone name (e.g., winda.ai)"
+  type        = string
+  default     = "winda.ai"
 }
 
-variable "private_subnet_ids" {
-  description = "List of private subnet IDs in the VPC for ECS tasks"
-  type        = list(string)
-  default     = ["subnet-0bb1c79de3EXAMPLE", "subnet-0bb1c79de3EXAMPLE"]
+# ============================================================
+# Routing Strategy
+# ============================================================
+variable "enable_subdomain_routing" {
+  description = "Use subdomain routing (corrosion-engineer.dev.winda.ai) instead of path-based (/api/corrosion-engineer/*)"
+  type        = bool
+  default     = false
+}
+
+variable "listener_rule_priority" {
+  description = "ALB listener rule priority (must be unique across all services, same across all regions)"
+  type        = number
+  default     = 100
+}
+
+variable "api_path_prefix" {
+  description = "Path prefix for path-based routing (only used if enable_subdomain_routing = false)"
+  type        = string
+  default     = "/api/corrosion-engineer/*"
 }
 
 variable "container_image" {
@@ -80,15 +93,19 @@ variable "cpu_target_utilization" {
   default     = 80
 }
 
-variable "zone_id" {
-  description = "Existing public Route53 Hosted Zone ID (record will always be created)"
-  type        = string
-  default     = "Z045078216NP3O5K1Q0OY"
+# ============================================================
+# Container Configuration
+# ============================================================
+variable "task_cpu" {
+  description = "Task CPU units (256 = 0.25 vCPU, 512 = 0.5 vCPU, 1024 = 1 vCPU)"
+  type        = number
+  default     = 512
 }
 
-variable "subdomain" {
-  description = "Subdomain to create (e.g., api)"
-  type        = string
+variable "task_memory" {
+  description = "Task memory in MB"
+  type        = number
+  default     = 1024
 }
 
 variable "extra_env_vars" {
@@ -133,17 +150,23 @@ variable "hibernation_min_capacity" {
   default     = 0
 }
 
+# ============================================================
+# Git & Tagging
+# ============================================================
+variable "repository" {
+  description = "GitHub repository name"
+  type        = string
+  default     = "corrosion_engineer_api_infra"
+}
+
+variable "commit_hash" {
+  description = "Git commit hash"
+  type        = string
+  default     = "local"
+}
+
 variable "tags" {
   description = "Additional tags to apply to all resources"
   type        = map(string)
   default     = {}
-}
-
-locals {
-  common_tags = merge({
-    Application = "corrosion-engineer-api"
-    Environment = var.environment
-    ManagedBy   = "Terraform"
-    Prefix      = var.name_prefix
-  }, var.tags)
 }

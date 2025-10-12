@@ -1,21 +1,11 @@
-output "vpc_id" {
-  description = "ID of the created VPC"
-  value       = data.aws_vpc.main.id
-}
-
-output "alb_dns_name" {
-  description = "DNS name of the Application Load Balancer"
-  value       = aws_lb.app.dns_name
-}
-
-output "alb_arn" {
-  description = "ARN of the Application Load Balancer"
-  value       = aws_lb.app.arn
-}
-
 output "service_name" {
   description = "ECS Service name"
   value       = aws_ecs_service.app.name
+}
+
+output "service_id" {
+  description = "ECS Service ID"
+  value       = aws_ecs_service.app.id
 }
 
 output "task_definition_arn" {
@@ -23,7 +13,22 @@ output "task_definition_arn" {
   value       = aws_ecs_task_definition.app.arn
 }
 
-output "route53_record_fqdn" {
-  description = "Fully qualified domain name of the Route53 record"
-  value       = aws_route53_record.alb.fqdn
+output "target_group_arn" {
+  description = "ALB Target Group ARN"
+  value       = aws_lb_target_group.this.arn
+}
+
+output "cloudwatch_log_group" {
+  description = "CloudWatch Log Group name"
+  value       = aws_cloudwatch_log_group.app.name
+}
+
+output "service_url" {
+  description = "Service URL (depends on routing strategy)"
+  value       = var.enable_subdomain_routing ? "https://${local.subdomain_fqdn}" : "https://${local.global_domain}${trimsuffix(var.api_path_prefix, "/*")}"
+}
+
+output "routing_strategy" {
+  description = "Current routing strategy in use"
+  value       = var.enable_subdomain_routing ? "subdomain-based" : "path-based"
 }

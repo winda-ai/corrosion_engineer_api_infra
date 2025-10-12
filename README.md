@@ -1,112 +1,266 @@
-# Corrosion Engineer API Infrastructure (Terraform)
+# Corrosion Engineer API Infrastructure
 
-Infrastructure-as-Code for deploying a stateless ASP.NET Core application to AWS using ECS Fargate behind an Application Load Balancer, with Route53 DNS, autoscaling, and CloudWatch logging.
+**ECS Fargate deployment that integrates with central infrastructure.**
 
-## Features
-- VPC with public & private subnets across 2 AZs
-- NAT Gateway for private egress, Internet Gateway for ALB
-- ECS Cluster (Fargate) + Service + Task Definition (0.5 vCPU / 1GB)
-- Application Load Balancer (HTTP + optional HTTPS)
-- Route53 A Alias record for custom subdomain
-- Autoscaling (Target tracking on CPU)
-- CloudWatch log group w/ retention
-- IAM roles (task execution + task role)
-- Consistent tagging with prefix and environment
+## What This Does
 
-## File Layout
+Deploys the Corrosion Engineer API as an ECS Fargate service that:
+- ✅ Uses shared VPC, ALB, and ECS cluster from **central_infra**
+- ✅ Automatic HTTPS with wildcard certificate
+- ✅ Multi-region support with latency-based DNS routing
+- ✅ Autoscaling based on CPU utilization
+- ✅ Optional cost-saving hibernation schedule
+
+---
+
+## Quick Start
+
+### 1. Update Configuration
+
+Edit `workspace/dev/us-east-1/terraform.tfvars`:
+
+```hcl
+terraform_state_bucket = "your-terraform-state-bucket"  # REQUIRED: Your S3 bucket name
+listener_rule_priority = 100                            # REQUIRED: Unique number per service
 ```
-main/
-  backend.tf        # Remote state backend (configured via CLI/backend.conf)
-  provider.tf       # AWS provider config
-  versions.tf       # Terraform + provider versions
-  variables.tf      # Input variables and common tags
-  main.tf           # Core infrastructure resources
-  outputs.tf        # Exported values
+
+### 2. Deploy
+
+```bash
+make init ENV=dev REGION=us-east-1
+make apply ENV=dev REGION=us-east-1
 ```
+
+### 3. Access Your Service
+
+**Path-Based (default):**
+```
+https://dev.winda.ai/api/corrosion-engineer/your-endpoint
+```
+
+**Subdomain-Based (optional):**
+```
+https://corrosion-engineer.dev.winda.ai/your-endpoint
+```
+
+---
+
+## Routing Options
+
+### Option A: Path-Based (Recommended)
+
+**Simpler setup, no DNS configuration needed**
+
+```hcl
+# In terraform.tfvars
+enable_subdomain_routing = false
+api_path_prefix          = "/api/corrosion-engineer/*"
+listener_rule_priority   = 100
+```
+
+Access: `https://dev.winda.ai/api/corrosion-engineer/*`
+
+✅ No DNS records needed  
+✅ Certificate already covers this  
+✅ Simpler setup
+
+---
+
+### Option B: Subdomain-Based
+
+**More isolation, requires DNS record**
+
+```hcl
+# In terraform.tfvars
+enable_subdomain_routing = true
+listener_rule_priority   = 100
+```
+
+Access: `https://corrosion-engineer.dev.winda.ai/*`
+
+✅ Cleaner URLs  
+✅ Better service isolation  
+⚠️ Creates additional Route53 record (done automatically)
+
+---
+
+## Multi-Region Deployment
+
+Deploy to additional regions for global availability:
+
+```bash
+# Deploy to us-west-2
+make apply ENV=dev REGION=us-west-2
+
+# Deploy to eu-west-1
+make apply ENV=dev REGION=eu-west-1
+```
+
+**Important:** Use the **same** `listener_rule_priority` across all regions.
+
+---
+
+## Configuration Guide
+
+### Listener Priority Management
+
+Each service needs a unique priority number (same across all regions):
+
+| Service | Priority |
+|---------|----------|
+| corrosion-engineer | 100 |
+| corrosion-prediction | 200 |
+| auth-service | 300 |
+
+### Scaling Configuration
+
+```hcl
+desired_count          = 1   # Initial task count
+min_capacity           = 1   # Minimum tasks
+max_capacity           = 3   # Maximum tasks
+cpu_target_utilization = 80  # Scale when CPU > 80%
+```
+
+### Cost Optimization
+
+Enable hibernation to scale down during off-hours:
+
+```hcl
+enable_hibernation_schedule = true
+hibernation_start_cron      = "cron(0 22 * * ? *)"  # 10 PM UTC
+hibernation_end_cron        = "cron(0 6 * * ? *)"   # 6 AM UTC
+hibernation_min_capacity    = 0                     # Stop completely
+```
+
+### Environment Variables
+
+Add custom environment variables:
+
+```hcl
+extra_env_vars = [
+  { name = "LOG_LEVEL", value = "DEBUG" },
+  { name = "API_KEY", value = "your-api-key" }
+]
+```
+
+---
+
+## What Gets Created
+
+Per deployment (per region):
+- 1 ECS Service (Fargate/Fargate Spot)
+- 1 ALB Target Group
+- 1 ALB Listener Rule (path or subdomain routing)
+- 1 CloudWatch Log Group
+- 2 IAM Roles (task execution + task runtime)
+- Optional: 1 Route53 record (if subdomain routing enabled)
+
+**Cost:** ~$20-30/month per region (1 task running 24/7)
+
+---
+
+## Commands
+
+```bash
+# Initialize
+make init ENV=dev REGION=us-east-1
+
+# Deploy
+make apply ENV=dev REGION=us-east-1
+
+# View service info
+make outputs ENV=dev REGION=us-east-1
+
+# View logs
+aws logs tail /ecs/corrosion-engineer-dev-us-east-1 --follow
+
+# Destroy
+make destroy ENV=dev REGION=us-east-1
+```
+
+---
+
+## Troubleshooting
+
+**Service tasks keep stopping?**
+- Check CloudWatch logs: `/ecs/corrosion-engineer-dev-us-east-1`
+- Verify health check endpoint returns 200: `/Health`
+- Confirm container listens on port 8080
+
+**Can't access service?**
+```bash
+# Test path-based routing
+curl https://dev.winda.ai/api/corrosion-engineer/Health
+
+# Test subdomain routing
+curl https://corrosion-engineer.dev.winda.ai/Health
+
+# Check DNS
+dig corrosion-engineer.dev.winda.ai
+```
+
+**Task execution errors?**
+- Verify GitHub token secret exists: `github_token_ecs`
+- Check IAM role permissions for pulling from GHCR
+- Confirm image exists and tag is correct
+
+**Listener rule conflicts?**
+- Ensure `listener_rule_priority` is unique across all services
+- Check other services aren't using the same priority
+- Priority must be same across all regions for same service
+
+---
 
 ## Prerequisites
-- Terraform >= 1.7.0
-- Existing AWS account + credentials (e.g., via `aws configure` or env vars)
-- Existing public Route53 hosted zone (zone ID)
-- Existing ACM certificate in same region for HTTPS (optional)
-- Container image published to a registry (e.g., GitHub Container Registry)
 
-## Required Inputs
-| Variable      | Description | Example |
-|---------------|-------------|---------|
-| `zone_id`     | Public Route53 hosted zone ID | `Z0123456789ABC` |
-| `container_image` | FQ image ref | `ghcr.io/acme/corrosion-api:1.0.0` |
+1. **Central Infrastructure** deployed to the same region
+2. **S3 Bucket** for Terraform state (must match central infra)
+3. **GitHub Token Secret** in AWS Secrets Manager: `github_token_ecs`
+4. **Container Image** pushed to GHCR
 
-## Common Optional Inputs
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `name_prefix` | `ce` | Resource name base |
-| `environment` | `dev` | Tagging / env context |
-| `subdomain` | `api` | DNS record prefix |
-| `enable_https` | `true` | Create HTTPS listener if cert provided |
-| `acm_certificate_arn` | `` | ACM cert ARN |
-| `cpu_target_utilization` | `80` | Autoscaling target |
+---
 
-See `variables.tf` for full list.
+## Files Structure
 
-## Example terraform.tfvars
-```hcl
-name_prefix          = "ce-dev"
-environment          = "dev"
-zone_id              = "Z0123456789ABC"
-subdomain            = "api"
-container_image      = "ghcr.io/acme/corrosion-api:1.0.0"
-acm_certificate_arn  = "arn:aws:acm:us-east-1:123456789012:certificate/uuid"
-log_retention_days   = 30
-cpu_target_utilization = 70
-min_capacity         = 1
-max_capacity         = 3
+```
+corrosion_engineer_api_infra/
+├── main/
+│   ├── data.tf          # References central infrastructure
+│   ├── service.tf       # ECS service, ALB rules, autoscaling
+│   ├── variables.tf     # Input variables
+│   ├── outputs.tf       # Service outputs
+│   ├── provider.tf      # AWS provider config
+│   └── backend.tf       # S3 backend config
+├── workspace/
+│   └── dev/
+│       └── us-east-1/
+│           ├── backend.conf
+│           └── terraform.tfvars
+└── Makefile
 ```
 
-## Usage
-```bash
-terraform init 
-terraform plan -out plan.tfplan
-terraform apply "plan.tfplan"
-```
+---
 
-To destroy:
-```bash
-terraform destroy
-```
+## Integration with Central Infrastructure
 
-## Outputs
-- `alb_dns_name`
-- `route53_record_fqdn`
-- `cluster_name`
-- `service_name`
-- `task_definition_arn`
-- `vpc_id`
+This repository **depends on** the `central_infra` repository outputs:
 
-## Updating the Service
-Updating just the container image:
-1. Update `container_image` variable/tag
-2. Run `terraform apply` (new task definition revision will register; service will deploy it)
+| Central Output | Used For |
+|----------------|----------|
+| `vpc_id` | Network placement |
+| `private_subnet_ids` | ECS task placement |
+| `ecs_cluster_id` | Where to deploy service |
+| `ecs_service_security_group_id` | Network access |
+| `https_listener_arn` | Add routing rules |
+| `alb_dns_name` | DNS alias target |
+| `global_domain_name` | URL construction |
 
-## HTTPS Notes
-- If `enable_https` is true but `acm_certificate_arn` is empty, only HTTP listener is created.
-- Certificate must be in the same AWS region as the ALB.
+**Deploy Order:**
+1. Deploy `central_infra` first
+2. Then deploy `corrosion_engineer_api_infra`
 
-## Scaling
-Target tracking on average CPU. Adjust `cpu_target_utilization`, `min_capacity`, and `max_capacity` to tune behavior. Add memory or request-based policies by extending `main.tf`.
-
-## Logging
-Container stdout/stderr sent to CloudWatch Logs under `/ecs/<name_prefix>/corrosion-engineer-api` with retention configured via `log_retention_days`.
-
-## Conventions
-- All names prefixed with `name_prefix` for easier multi-env deployments in one account.
-- `environment` used strictly for tagging and runtime environment variable inside the container.
-
-## Future Enhancements (Ideas)
-- Add WAFv2 ACL association
-- Add secret management (SSM Parameter Store / Secrets Manager)
-- Add CI/CD pipeline example (GitHub Actions)
-- Add HTTPS redirect (listener rule) to force TLS
+---
 
 ## License
-Internal / Proprietary (adjust as appropriate).
+
+Proprietary - Winda AI
