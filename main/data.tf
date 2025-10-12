@@ -40,5 +40,5 @@ locals {
   name_prefix = "${var.name_prefix}-${var.environment}-${var.region}"
 
   # Subdomain FQDN (if using subdomain routing)
-  subdomain_fqdn = "corrosion-engineer.${local.global_domain}"
+  subdomain_fqdn = "api.corrosion-engineer.${local.global_domain}"
 }
