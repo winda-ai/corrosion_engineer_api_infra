@@ -37,7 +37,8 @@ locals {
   route53_zone_id       = data.terraform_remote_state.central.outputs.route53_zone_id
 
   # Service-specific naming
-  name_prefix = "${var.name_prefix}-${var.environment}-${var.region}"
+  name_prefix       = "${var.name_prefix}-${var.environment}-${var.region}"
+  name_prefix_short = "ce-${var.environment}-${replace(var.region, "-", "")}"
 
   # Subdomain FQDN (if using subdomain routing)
   subdomain_fqdn = "api.corrosion-engineer.${local.global_domain}"
