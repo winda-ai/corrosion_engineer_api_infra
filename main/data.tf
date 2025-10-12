@@ -10,7 +10,6 @@ data "terraform_remote_state" "central" {
 
 # Get Route53 zone for subdomain DNS (if using subdomain routing)
 data "aws_route53_zone" "selected" {
-  count        = var.enable_subdomain_routing ? 1 : 0
   name         = var.route53_zone_name
   private_zone = false
 }
@@ -41,5 +40,5 @@ locals {
   name_prefix = "${var.name_prefix}-${var.environment}-${var.region}"
 
   # Subdomain FQDN (if using subdomain routing)
-  subdomain_fqdn = var.enable_subdomain_routing ? "corrosion-engineer.${local.global_domain}" : null
+  subdomain_fqdn = "corrosion-engineer.${local.global_domain}"
 }

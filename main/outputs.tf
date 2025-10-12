@@ -25,10 +25,5 @@ output "cloudwatch_log_group" {
 
 output "service_url" {
   description = "Service URL (depends on routing strategy)"
-  value       = var.enable_subdomain_routing ? "https://${local.subdomain_fqdn}" : "https://${local.global_domain}${trimsuffix(var.api_path_prefix, "/*")}"
-}
-
-output "routing_strategy" {
-  description = "Current routing strategy in use"
-  value       = var.enable_subdomain_routing ? "subdomain-based" : "path-based"
+  value       = "https://${local.subdomain_fqdn}"
 }
