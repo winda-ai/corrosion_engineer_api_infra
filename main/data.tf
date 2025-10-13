@@ -40,6 +40,6 @@ locals {
   name_prefix       = "${var.name_prefix}-${var.environment}-${var.region}"
   name_prefix_short = "ce-${var.environment}-${replace(var.region, "-", "")}"
 
-  # Subdomain FQDN (if using subdomain routing)
+  # Subdomain FQDN for API
   subdomain_fqdn = "api.corrosion-engineer.${local.global_domain}"
 }
