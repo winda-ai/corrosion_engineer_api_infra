@@ -218,12 +218,22 @@ resource "aws_ecs_service" "app" {
   cluster                 = local.ecs_cluster_id
   task_definition         = aws_ecs_task_definition.app.arn
   desired_count           = var.desired_count
-  launch_type             = null # Use capacity provider from cluster
   enable_ecs_managed_tags = true
   enable_execute_command  = true
   force_new_deployment    = true
 
-  # Use cluster's default capacity provider strategy (Fargate/Fargate Spot)
+  # Use capacity provider strategy (Fargate Spot with Fargate fallback)
+  capacity_provider_strategy {
+    capacity_provider = "FARGATE_SPOT"
+    weight            = 100
+    base              = 0
+  }
+
+  capacity_provider_strategy {
+    capacity_provider = "FARGATE"
+    weight            = 0
+    base              = 0
+  }
 
   network_configuration {
     subnets          = local.private_subnet_ids
