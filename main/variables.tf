@@ -26,10 +26,6 @@ variable "name_prefix" {
 # ============================================================
 # Central Infrastructure Reference
 # ============================================================
-variable "terraform_state_bucket" {
-  description = "S3 bucket where central infrastructure state is stored"
-  type        = string
-}
 
 variable "route53_zone_name" {
   description = "Route53 hosted zone name (e.g., winda.ai)"

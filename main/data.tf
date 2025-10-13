@@ -2,7 +2,7 @@
 data "terraform_remote_state" "central" {
   backend = "s3"
   config = {
-    bucket = var.terraform_state_bucket
+    bucket = "winda-terraform-artifacts"
     key    = "central_infra/${var.environment}/${var.region}/terraform.tfstate"
     region = var.region
   }
