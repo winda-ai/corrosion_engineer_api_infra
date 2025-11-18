@@ -193,11 +193,11 @@ resource "aws_ecs_task_definition" "app" {
       ], var.extra_env_vars)
 
       healthCheck = {
-        command     = ["CMD-SHELL", "curl -f http://localhost:${var.container_port}${var.health_check_path} || exit 1"]
+        command     = ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:${var.container_port}${var.health_check_path} || exit 1"]
         interval    = 30
         timeout     = 5
         retries     = 3
-        startPeriod = 10
+        startPeriod = 60
       }
 
       # Use GitHub token secret for private registry
