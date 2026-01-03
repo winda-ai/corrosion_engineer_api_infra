@@ -222,16 +222,10 @@ resource "aws_ecs_service" "app" {
   enable_execute_command  = true
   force_new_deployment    = true
 
-  # Use capacity provider strategy (Fargate Spot with Fargate fallback)
+  # Force tasks onto Fargate Spot
   capacity_provider_strategy {
     capacity_provider = "FARGATE_SPOT"
     weight            = 100
-    base              = 0
-  }
-
-  capacity_provider_strategy {
-    capacity_provider = "FARGATE"
-    weight            = 0
     base              = 0
   }
 
